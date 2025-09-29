@@ -1,0 +1,16 @@
+# Core ML stack 
+pandas
+scikit-learn
+numpy
+joblib
+
+# API + logging
+Flask
+gunicorn
+
+# Kaggle dataset helper
+kagglehub
+
+# Testing
+pytest
+requests
