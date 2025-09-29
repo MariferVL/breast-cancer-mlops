@@ -1,8 +1,3 @@
-# =============================================================================
-# TRAIN A SIMPLE MODEL ON BREAST CANCER WISCONSIN DATASET AND SERIALIZE IT
-# Beginner-friendly, pythonic, with clear steps and comments in English
-# =============================================================================
-
 import os
 import json
 import joblib
@@ -15,7 +10,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, classification_report
 
 # =============================================================================
-# VISUAL STYLING FOR CLI (reused from user's provided code)
+#                           VISUAL STYLING FOR CLI
 # =============================================================================
 # Base colors for plots
 bg_color = '#383838'
@@ -68,7 +63,7 @@ def print_success(message):
 
 
 # =============================================================================
-# CONSTANTS
+#                                  CONSTANTS
 # =============================================================================
 MODEL_DIR = "models"
 MODEL_PATH = os.path.join(MODEL_DIR, "breast_cancer_pipeline.joblib")
@@ -130,7 +125,7 @@ def prepare_data(df: pd.DataFrame):
         y = combined["diagnosis"]
         X = combined.drop(columns=["diagnosis"])
 
-    # Ensure all features are numeric (dataset should be numeric already)
+    # Ensure all features are numeric
     X = X.apply(pd.to_numeric, errors="coerce")
     if X.isnull().sum().sum() > 0:
         raise ValueError("Non-numeric values found after coercion. Please inspect the dataset.")
