@@ -1,10 +1,8 @@
-# =============================================================================
-# Basic endpoint tests using Flask's test client
-# =============================================================================
-
 import json
 import os
 import joblib
+import sys, os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from app import app, FEATURE_NAMES
 
 def test_healthcheck():
