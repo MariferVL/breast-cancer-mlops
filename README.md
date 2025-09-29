@@ -167,3 +167,4 @@ The repository includes a GitHub Actions workflow (`.github/workflows/ci.yml`) t
 - The model is trained with a simple pipeline (`StandardScaler + LogisticRegression`).
 - Logging and input validation are implemented in the API.
 
+
