@@ -6,7 +6,7 @@ ENV PYTHONUNBUFFERED=1
 # Set work directory
 WORKDIR /app
 
-# Install system deps (optional minimal)
+# Install system deps 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
@@ -19,11 +19,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY train.py /app/train.py
 COPY app.py /app/app.py
 
-# Models folder (artifacts are created by train.py)
+# Models folder 
 RUN mkdir -p /app/models
 
-# Run training at build time (optional for local reproducibility)
-# You can comment this if you prefer to train on host and then COPY models/
+# Run training at build time 
 RUN python /app/train.py
 
 # Expose Flask port
