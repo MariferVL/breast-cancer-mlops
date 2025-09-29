@@ -1,17 +1,13 @@
-# =============================================================================
-# FLASK API TO SERVE THE BREAST CANCER MODEL
-# Beginner-friendly, pythonic, validation + error handling + logging
-# =============================================================================
-
 import os
 import json
 import logging
 import joblib
 import numpy as np
+import pandas as pd
 from flask import Flask, request, jsonify
 
 # =============================================================================
-# VISUAL STYLING FOR CLI (reused)
+#                   VISUAL STYLING FOR CLI 
 # =============================================================================
 bg_color = '#383838'
 text_color = '#FFFFFF'
@@ -63,7 +59,7 @@ def print_success(message):
 
 
 # =============================================================================
-# LOADING ARTIFACTS
+#                           LOADING ARTIFACTS
 # =============================================================================
 MODEL_DIR = "models"
 MODEL_PATH = os.path.join(MODEL_DIR, "breast_cancer_pipeline.joblib")
@@ -79,7 +75,7 @@ with open(FEATURES_PATH, "r", encoding="utf-8") as f:
     FEATURE_NAMES = json.load(f)
 
 # =============================================================================
-# LOGGING SETUP
+#                               LOGGING SETUP
 # =============================================================================
 logging.basicConfig(
     level=logging.INFO,
@@ -89,7 +85,7 @@ logger = logging.getLogger("breast-cancer-api")
 
 
 # =============================================================================
-# FLASK APP
+#                                   FLASK APP
 # =============================================================================
 app = Flask(__name__)
 
@@ -150,10 +146,12 @@ def predict():
         if not ok:
             logger.warning(f"Validation failed: {result}")
             return jsonify({"error": result}), 400
-
-        X = result  # shape (1, n_features)
+        
+        # Convert numpy array to DataFrame with feature names
+        X = pd.DataFrame(result, columns=FEATURE_NAMES)
         pred = model.predict(X)[0]
-        proba = None
+        proba = float(model.predict_proba(X)[0][1])
+      
         # LogisticRegression supports predict_proba
         try:
             proba = float(model.predict_proba(X)[0][1])
@@ -174,5 +172,5 @@ def predict():
 
 if __name__ == "__main__":
     print_header("Starting Breast Cancer API")
-    # Beginner-friendly dev server
+    # Dev server
     app.run(host="0.0.0.0", port=8000, debug=False)
