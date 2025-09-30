@@ -3,7 +3,7 @@ import json
 import joblib
 import pandas as pd
 
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import LogisticRegression
@@ -12,12 +12,6 @@ from sklearn.metrics import accuracy_score, classification_report
 # =============================================================================
 #                           VISUAL STYLING FOR CLI
 # =============================================================================
-# Base colors for plots
-bg_color = '#383838'
-text_color = '#FFFFFF'
-plot_bg_color = '#000000'
-
-
 class Colors:
     """Class to hold color codes for terminal output."""
     HEADER = '\033[95m'
@@ -32,20 +26,17 @@ class Colors:
 
 
 def print_header(title):
-    """Prints a styled main header."""
     print(f"\n{Colors.BOLD}{Colors.HEADER}{'='*60}{Colors.ENDC}")
     print(f"{Colors.BOLD}{Colors.HEADER}📊 {title}{Colors.ENDC}")
     print(f"{Colors.BOLD}{Colors.HEADER}{'='*60}{Colors.ENDC}")
 
 
 def print_subheader(title):
-    """Prints a styled subheader."""
     print(f"\n{Colors.BOLD}{Colors.OKCYAN}🔹 {title}{Colors.ENDC}")
     print(f"{Colors.OKCYAN}{'-'*40}{Colors.ENDC}")
 
 
 def print_metric(name, value, color=Colors.OKGREEN):
-    """Prints a formatted metric."""
     if isinstance(value, float):
         print(f"  {color}• {name}: {value:.4f}{Colors.ENDC}")
     else:
@@ -53,12 +44,10 @@ def print_metric(name, value, color=Colors.OKGREEN):
 
 
 def print_info(message, color=Colors.OKBLUE):
-    """Prints an informational message."""
     print(f"{color}ℹ️  {message}{Colors.ENDC}")
 
 
 def print_success(message):
-    """Prints a success message."""
     print(f"{Colors.OKGREEN}✅ {message}{Colors.ENDC}")
 
 
@@ -70,104 +59,103 @@ MODEL_PATH = os.path.join(MODEL_DIR, "breast_cancer_pipeline.joblib")
 FEATURES_PATH = os.path.join(MODEL_DIR, "feature_names.json")
 
 
+# =============================================================================
+#                               DATA LOADING
+# =============================================================================
 def load_dataset():
-    """Download or load Breast Cancer Wisconsin dataset using kagglehub and return a DataFrame.
-
-    Note:
-    - Requires a Kaggle account configured locally for kagglehub to download.
-    - Falls back to reading 'data.csv' if already present in the working directory.
-    """
+    """Load Breast Cancer Wisconsin dataset from KaggleHub or local fallback."""
     print_header("Loading dataset")
     try:
-        import kagglehub  # imported here to avoid dependency if not needed elsewhere
+        import kagglehub
         path = kagglehub.dataset_download("uciml/breast-cancer-wisconsin-data")
         csv_path = os.path.join(path, "data.csv")
         if not os.path.exists(csv_path):
-            raise FileNotFoundError("data.csv not found in downloaded Kaggle dataset.")
-        print_info(f"Dataset downloaded to: {path}")
+            raise FileNotFoundError("data.csv not found in Kaggle dataset.")
         df = pd.read_csv(csv_path)
         print_success("Dataset loaded from Kaggle.")
         return df
-    except Exception as e:
+    except Exception:
         print_info("Attempting local fallback: './data.csv'")
         if os.path.exists("data.csv"):
             df = pd.read_csv("data.csv")
             print_success("Dataset loaded from local 'data.csv'.")
             return df
-        print_metric("Error", str(e), color=Colors.FAIL)
-        raise
+        raise FileNotFoundError("Dataset not found. Please provide 'data.csv'.")
 
 
 def prepare_data(df: pd.DataFrame):
-    """Prepare features and target from the dataset.
-
-    - Target column: 'diagnosis' (B/M)
-    - Drops non-feature columns: 'id', 'Unnamed: 32' if present
-    - Uses all remaining numeric feature columns
-    """
+    """Prepare features and target from the dataset."""
     print_header("Preparing data")
-    # Drop obvious non-feature columns if present
-    for col in ["id", "Unnamed: 32"]:
-        if col in df.columns:
-            df = df.drop(columns=[col])
+    df = df.drop(columns=["id", "Unnamed: 32"], errors="ignore")
 
-    # Target
     if "diagnosis" not in df.columns:
         raise ValueError("Expected 'diagnosis' column in dataset.")
 
     y = df["diagnosis"].map({"B": 0, "M": 1})
     X = df.drop(columns=["diagnosis"])
 
-    # Basic sanity checks
-    if X.isnull().sum().sum() > 0:
-        print_info("Missing values detected. Dropping rows with NaNs for simplicity.")
-        combined = pd.concat([X, y], axis=1).dropna()
-        y = combined["diagnosis"]
-        X = combined.drop(columns=["diagnosis"])
-
-    # Ensure all features are numeric
-    X = X.apply(pd.to_numeric, errors="coerce")
-    if X.isnull().sum().sum() > 0:
-        raise ValueError("Non-numeric values found after coercion. Please inspect the dataset.")
+    # Ensure numeric
+    X = X.apply(pd.to_numeric, errors="coerce").dropna()
 
     print_metric("Features shape", X.shape)
     print_metric("Target distribution (M=1)", int(y.sum()))
     return X, y, list(X.columns)
 
 
-def build_pipeline():
-    """Create a simple ML pipeline: StandardScaler + LogisticRegression.
+# =============================================================================
+#                           PIPELINE + OPTIMIZATION
+# =============================================================================
+def build_and_optimize_pipeline(X_train, y_train):
+    """Build pipeline and optimize hyperparameters with GridSearchCV."""
+    print_header("Building and optimizing pipeline")
 
-    This is beginner-friendly and commonly used for classification.
-    """
-    print_header("Building pipeline")
     pipeline = Pipeline(steps=[
         ("scaler", StandardScaler()),
-        ("clf", LogisticRegression(max_iter=1000, solver="lbfgs"))
+        ("clf", LogisticRegression(max_iter=1000, solver="liblinear"))
     ])
-    print_success("Pipeline created: StandardScaler + LogisticRegression")
-    return pipeline
+
+    param_grid = {
+        "clf__C": [0.01, 0.1, 1, 10],
+        "clf__penalty": ["l1", "l2"]
+    }
+
+    grid = GridSearchCV(
+        pipeline,
+        param_grid,
+        cv=5,
+        scoring="accuracy",
+        n_jobs=-1
+    )
+    grid.fit(X_train, y_train)
+
+    print_metric("Best params", grid.best_params_)
+    return grid.best_estimator_
 
 
-def train_and_evaluate(pipeline: Pipeline, X, y):
-    """Train the pipeline and print basic evaluation metrics."""
+def train_and_evaluate(X, y):
+    """Train pipeline and print evaluation metrics."""
     print_header("Training and evaluation")
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42, stratify=y
     )
-    pipeline.fit(X_train, y_train)
-    preds = pipeline.predict(X_test)
+
+    best_pipeline = build_and_optimize_pipeline(X_train, y_train)
+    preds = best_pipeline.predict(X_test)
+
     acc = accuracy_score(y_test, preds)
     print_metric("Accuracy", acc)
+
     print_subheader("Classification report")
-    # Keep report printing simple for beginners
     report = classification_report(y_test, preds, target_names=["Benign", "Malignant"])
     print(report)
-    return pipeline
+
+    return best_pipeline
 
 
+# =============================================================================
+#                               SAVE ARTIFACTS
+# =============================================================================
 def save_artifacts(pipeline: Pipeline, feature_names):
-    """Save model pipeline and feature names for API validation."""
     print_header("Saving artifacts")
     os.makedirs(MODEL_DIR, exist_ok=True)
     joblib.dump(pipeline, MODEL_PATH)
@@ -177,12 +165,14 @@ def save_artifacts(pipeline: Pipeline, feature_names):
     print_success(f"Feature names saved to: {FEATURES_PATH}")
 
 
+# =============================================================================
+#                                   MAIN
+# =============================================================================
 def main():
     print_header("Breast Cancer Model Training")
     df = load_dataset()
     X, y, feature_names = prepare_data(df)
-    pipeline = build_pipeline()
-    pipeline = train_and_evaluate(pipeline, X, y)
+    pipeline = train_and_evaluate(X, y)
     save_artifacts(pipeline, feature_names)
     print_success("Training workflow completed.")
 

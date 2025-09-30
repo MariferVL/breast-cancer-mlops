@@ -1,32 +1,43 @@
-FROM python:3.11-slim
+# ============================
+# Stage 1: Build environment
+# ============================
+FROM python:3.11-slim AS builder
 
-# Prevents Python from buffering stdout/stderr
-ENV PYTHONUNBUFFERED=1
-
-# Set work directory
+# Set working directory
 WORKDIR /app
 
-# Install system deps 
+# Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
+    build-essential gcc \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements and install
-COPY requirements.txt /app/requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+# Install Python dependencies in a virtual environment
+COPY requirements.txt .
+RUN python -m venv /opt/venv && \
+    /opt/venv/bin/pip install --upgrade pip && \
+    /opt/venv/bin/pip install -r requirements.txt
 
-# Copy project files
-COPY train.py /app/train.py
-COPY app.py /app/app.py
+# ============================
+# Stage 2: Runtime environment
+# ============================
+FROM python:3.11-slim
 
-# Models folder 
-RUN mkdir -p /app/models
+WORKDIR /app
 
-# Run training at build time 
-RUN python /app/train.py
+# Copy virtual environment from builder
+COPY --from=builder /opt/venv /opt/venv
 
-# Expose Flask port
+# Ensure venv is used
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Copy only necessary files
+COPY app.py train.py ./
+COPY models/ ./models/
+COPY requirements.txt .
+COPY tests/ ./tests/
+
+# Expose port
 EXPOSE 8000
 
-# Default command: serve with gunicorn for better container use
-CMD ["gunicorn", "-w", "2", "-b", "0.0.0.0:8000", "app:app"]
+# Run with Gunicorn for production
+CMD ["gunicorn", "-b", "0.0.0.0:8000", "app:app"]
